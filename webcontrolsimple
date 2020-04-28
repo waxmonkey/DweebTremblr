@@ -1,0 +1,195 @@
+
+//zoomkat 7-03-12, combined client and server
+//simple button GET with iframe code
+//for use with IDE 1.0
+//open serial monitor and send an g to test client and
+//see what the arduino client/server receives
+//web page buttons make pin 5 high/low
+//use the ' in html instead of " to prevent having to escape the "
+//address will look like http://192.168.1.102:84 when submited
+//for use with W5100 based ethernet shields
+//note that the below bug fix may be required
+// http://code.google.com/p/arduino/issues/detail?id=605
+
+#include <SPI.h>
+#include <Ethernet.h>
+#include <RCSwitch.h>
+//Network config
+byte mac[] = {0xDE, 0xAD, 0xCE, 0xEF, 0xFE, 0xED }; //assign arduino mac address
+byte ip[] = {192, 168, 1, 30}; // ip in lan assigned to arduino
+byte gateway[] = {192, 168, 1, 1 }; // internet access via router
+byte subnet[] = {255, 255, 255, 0 }; //subnet mask
+EthernetServer server(84); //server port arduino server will use
+EthernetClient client;
+char serverName[] = "checkip.dyndns.com"; // (DNS) zoomkat's test web page server
+//byte serverName[] = { 208, 104, 2, 86 }; // (IP) zoomkat web page server IP address
+
+String readString; //used by server to capture GET request 
+// RF transmitter
+RCSwitch mySwitch = RCSwitch();
+//////////////////////
+
+void setup(){
+ // Transmitter is connected to Arduino Pin #14  
+  mySwitch.enableTransmit(2);
+ 
+  //pinMode(5, OUTPUT); //pin 5 selected to control
+  Ethernet.begin(mac,ip,gateway,gateway,subnet); 
+  server.begin();
+  Serial.begin(9600); 
+  Serial.println(F("server/client 1.0 test 7/03/12")); // keep track of what is loaded
+  Serial.println(F("Send an g in serial monitor to test client")); // what to do to test client
+}
+
+void loop(){
+  // check for serial input
+  if (Serial.available() > 0) 
+  {
+    byte inChar;
+    inChar = Serial.read();
+    if(inChar == 'g')
+    {
+      sendGET(); // call client sendGET function
+    }
+  }  
+
+  EthernetClient client = server.available();
+  if (client) {
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+
+        //read char by char HTTP request
+        if (readString.length() < 100) {
+
+          //store characters to string 
+          readString += c; 
+          //Serial.print(c);
+        } 
+
+        //if HTTP request has ended
+        if (c == '\n') {
+
+          ///////////////
+          Serial.print(readString); //print to serial monitor for debuging 
+
+            //now output HTML data header
+          if(readString.indexOf('?') >=0) { //don't send new page
+            client.println(F("Trelmblr control demo"));
+            client.println();
+            client.println();  
+          }
+          else {   
+            client.println(F("HTTP/1.1 200 OK")); //send new page on browser request
+            client.println(F("Content-Type: text/html"));
+            client.println();
+
+            client.println(F("<HTML>"));
+            client.println(F("<HEAD>"));
+            client.println(F("<TITLE>Arduino GET test page</TITLE>"));
+            client.println(F("</HEAD>"));
+            client.println(F("<BODY>"));
+            client.println(F("<font size 7>"));
+
+            client.println(F("<H1>Tremblr control demo</H1>"));
+
+            // DIY buttons
+            client.println(F("Speed Up"));
+            client.println(F("<a href=/?on2 target=inlineframe>Speed Up</a>")); 
+            client.println(F("<br>"));
+            client.println(F("<br>"));
+            client.println(F("Speed Down"));
+            client.println(F("<a href=/?off3 target=inlineframe>Speed Down</a><br><br>")); 
+            client.println(F("Suck More"));
+            client.println(F("<a href=/?on4 target=inlineframe>Suck More</a>")); 
+            client.println(F("<br>"));
+            client.println(F("<br>"));
+            client.println(F("Suck Less"));
+            client.println(F("<a href=/?off5 target=inlineframe>Suck Less</a><br><br>")); 
+            client.println(F("Power On/Off"));
+            client.println(F("<a href=/?on6 target=inlineframe>Power</a>"));         
+            client.println(F("<IFRAME name=inlineframe style='display:none'>"));          
+            client.println(F("</IFRAME>"));
+            client.println(F("</BODY>"));
+            client.println(F("</HTML>"));
+          }
+
+          delay(1);
+          //stopping client
+          client.stop();
+
+          ///////////////////// control arduino pin
+          if(readString.indexOf('2') >0)//checks for 2
+          {
+           mySwitch.send(16076992, 24); // Speed Up
+            Serial.println("Speed Up");
+            Serial.println();
+          }
+          if(readString.indexOf('3') >0)//checks for 3
+          {
+          mySwitch.send(16076848, 24);  // Speed Down
+            Serial.println("Speed Down");
+            Serial.println();
+          }
+          if(readString.indexOf('4') >0)//checks for 4
+          {
+           mySwitch.send(16077568, 24);    // Suck more
+            Serial.println("Suck More");
+            Serial.println();
+          }
+          if(readString.indexOf('5') >0)//checks for 5
+          {
+           mySwitch.send(16076803, 24);    // Suck less
+            Serial.println("Suck Less");
+            Serial.println();
+          }
+          if(readString.indexOf('6') >0)//checks for 6
+          {
+             mySwitch.send(16076812, 24);   // Toggle Power
+            Serial.println("Power");
+            Serial.println();
+          }
+          if(readString.indexOf('7') >0)//checks for 7
+          {
+             mySwitch.send(16076812, 24);   // Toggle Power
+            Serial.println("Power");
+            Serial.println();
+          }     
+  
+          //clearing string for next read
+          readString="";
+
+        }
+      }
+    }
+  }
+} 
+
+//////////////////////////
+void sendGET() //client function to send and receive GET data from external server.
+{
+  if (client.connect(serverName, 80)) {
+    Serial.println(F("connected"));
+    client.println(F("GET / HTTP/1.1"));
+    client.println(F("Host: checkip.dyndns.com"));
+    client.println(F("Connection: close"));
+    client.println();
+  } 
+  else {
+    Serial.println(F("connection failed"));
+    Serial.println();
+  }
+
+  while(client.connected() && !client.available()) delay(1); //waits for data
+  while (client.connected() || client.available()) { //connected or data available
+    char c = client.read();
+    Serial.print(c);
+  }
+
+  Serial.println();
+  Serial.println(F("disconnecting."));
+  Serial.println(F("=================="));
+  Serial.println();
+  client.stop();
+
+}
