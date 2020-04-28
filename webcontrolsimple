@@ -1,3 +1,6 @@
+//Basic webcontrol using ethernet shield and a 315 chip to control tremblr... not the most elegent but it somewhat works...
+
+
 
 //zoomkat 7-03-12, combined client and server
 //simple button GET with iframe code
